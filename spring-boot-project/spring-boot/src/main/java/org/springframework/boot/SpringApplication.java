@@ -221,6 +221,7 @@ public class SpringApplication {
 
 	private Banner banner;
 
+	// first entry, resourceLoader is null;
 	private ResourceLoader resourceLoader;
 
 	private BeanNameGenerator beanNameGenerator;
@@ -279,12 +280,15 @@ public class SpringApplication {
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
+		// 第一次进来的时候 ResourceLoader 是 null。
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "PrimarySources must not be null");
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
 		this.webApplicationType = WebApplicationType.deduceFromClasspath();
+		// 都来源于 spring.factories
 		this.bootstrapRegistryInitializers = getBootstrapRegistryInitializersFromSpringFactories();
 		setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
+		// 设置初始化时的监听器
 		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
 		this.mainApplicationClass = deduceMainApplicationClass();
 	}
@@ -323,19 +327,26 @@ public class SpringApplication {
 	public ConfigurableApplicationContext run(String... args) {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
+		// 启动引导上下文
 		DefaultBootstrapContext bootstrapContext = createBootstrapContext();
+		// 可配置应用上下文, 注册 Bootstrapper
 		ConfigurableApplicationContext context = null;
 		configureHeadlessProperty();
+		// 从 spring.factories 获取列表 (EventPublishingRunListener.java
 		SpringApplicationRunListeners listeners = getRunListeners(args);
+		// 发布启动事件
 		listeners.starting(bootstrapContext, this.mainApplicationClass);
 		try {
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
+			// 配置环境大概是
 			ConfigurableEnvironment environment = prepareEnvironment(listeners, bootstrapContext, applicationArguments);
 			configureIgnoreBeanInfo(environment);
 			Banner printedBanner = printBanner(environment);
+			//
 			context = createApplicationContext();
 			context.setApplicationStartup(this.applicationStartup);
 			prepareContext(bootstrapContext, context, environment, listeners, applicationArguments, printedBanner);
+			// 刷新容器， 由启动上下文转换为应用上下文，储存相关的
 			refreshContext(context);
 			afterRefresh(context, applicationArguments);
 			stopWatch.stop();
@@ -370,6 +381,7 @@ public class SpringApplication {
 			DefaultBootstrapContext bootstrapContext, ApplicationArguments applicationArguments) {
 		// Create and configure the environment
 		ConfigurableEnvironment environment = getOrCreateEnvironment();
+		System.err.println("[Ben] envoirment type : " + environment.getClass().getName());
 		configureEnvironment(environment, applicationArguments.getSourceArgs());
 		ConfigurationPropertySources.attach(environment);
 		listeners.environmentPrepared(bootstrapContext, environment);
@@ -397,10 +409,15 @@ public class SpringApplication {
 	private void prepareContext(DefaultBootstrapContext bootstrapContext, ConfigurableApplicationContext context,
 			ConfigurableEnvironment environment, SpringApplicationRunListeners listeners,
 			ApplicationArguments applicationArguments, Banner printedBanner) {
+		// 设置上下文环境变量
 		context.setEnvironment(environment);
+		// 后处理上下文 -注册Bean工厂 -设置ResouceLoader -注册转换器
 		postProcessApplicationContext(context);
+		// 调用已经注册的ApplicationContextInitializer
 		applyInitializers(context);
+		// SpringApplicationRunListeners 调用 ContextPrepared
 		listeners.contextPrepared(context);
+		// 关闭BootstrapContext并准备ApplicationContext时要调用的方法
 		bootstrapContext.close(context);
 		if (this.logStartupInfo) {
 			logStartupInfo(context.getParent() == null);
@@ -455,6 +472,9 @@ public class SpringApplication {
 	}
 
 	private <T> Collection<T> getSpringFactoriesInstances(Class<T> type, Class<?>[] parameterTypes, Object... args) {
+		// ApplicationContextInitializer, 初始话调用的时候获取 ApplicationContextInitializer.class
+		// paramterTypse 是空列表
+		// 没有额外的 args
 		ClassLoader classLoader = getClassLoader();
 		// Use names and ensure unique to protect against duplicates
 		Set<String> names = new LinkedHashSet<>(SpringFactoriesLoader.loadFactoryNames(type, classLoader));
@@ -512,6 +532,7 @@ public class SpringApplication {
 			ConversionService conversionService = ApplicationConversionService.getSharedInstance();
 			environment.setConversionService((ConfigurableConversionService) conversionService);
 		}
+		// 把运行参数加入到 environment 中
 		configurePropertySources(environment, args);
 		configureProfiles(environment, args);
 	}
@@ -598,6 +619,7 @@ public class SpringApplication {
 	 * @see #setApplicationContextFactory(ApplicationContextFactory)
 	 */
 	protected ConfigurableApplicationContext createApplicationContext() {
+		System.err.println(this.webApplicationType.toString());;
 		return this.applicationContextFactory.create(this.webApplicationType);
 	}
 
@@ -607,10 +629,12 @@ public class SpringApplication {
 	 * @param context the application context
 	 */
 	protected void postProcessApplicationContext(ConfigurableApplicationContext context) {
+		// 注册 beanName 生成器
 		if (this.beanNameGenerator != null) {
 			context.getBeanFactory().registerSingleton(AnnotationConfigUtils.CONFIGURATION_BEAN_NAME_GENERATOR,
 					this.beanNameGenerator);
 		}
+		// 设置上下文的资源加载器
 		if (this.resourceLoader != null) {
 			if (context instanceof GenericApplicationContext) {
 				((GenericApplicationContext) context).setResourceLoader(this.resourceLoader);
@@ -619,6 +643,7 @@ public class SpringApplication {
 				((DefaultResourceLoader) context).setClassLoader(this.resourceLoader.getClassLoader());
 			}
 		}
+		// 注册转化器
 		if (this.addConversionService) {
 			context.getBeanFactory().setConversionService(ApplicationConversionService.getSharedInstance());
 		}
